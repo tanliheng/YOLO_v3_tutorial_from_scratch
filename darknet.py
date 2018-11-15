@@ -25,18 +25,19 @@ def parse_cfg(cfgfile):
     Returns a list of blocks. Each blocks describes a block in the neural
     network to be built. Block is represented as a dictionary in the list
     配置文件定义了5种不同type:convolutional,shortcut,upsample,route,yolo
+    将每个块存储为词典。这些块的属性和值都以键值对的形式存储在词典中。解析过程中，我们将这些词典（由代码中的变量 block 表示）添加到列表 blocks 中。我们的函数将返回该 block。
     """
     
-    file = open(cfgfile, 'r')
+    file = open(cfgfile, 'r') #将配置文件内容保存在字符串列表中。下面的代码对该列表执行预处理：
     lines = file.read().split('\n')                        # store the lines in a list
     lines = [x for x in lines if len(x) > 0]               # get read of the empty lines 
     lines = [x for x in lines if x[0] != '#']              # get rid of comments
     lines = [x.rstrip().lstrip() for x in lines]           # get rid of fringe whitespaces
-    #cfg文件中的每个块用[]括起来最后组成一个列表，一个block存储一个块的内容，即每个层用一个字典block存储
+    #cfg文件中的每个块用[]括起来最后组成一个列表，一个block存储一个块的内容，即每个层用一个字典block存储。
     block = {}
     blocks = []
     
-    for line in lines:
+    for line in lines: #遍历预处理后的列表，得到块
         if line[0] == "[":               # This marks the start of a new block
             if len(block) != 0:          # If block is not empty, implies it is storing values of previous block.
                 blocks.append(block)     # add it the blocks list
@@ -48,6 +49,7 @@ def parse_cfg(cfgfile):
     blocks.append(block) #退出循环，将最后一个未加入的block加进去
     
     return blocks
+#将使用上面 parse_cfg 返回的列表来构建 PyTorch 模块，作为配置文件中的构建块。列表中有 5 种类型的层。PyTorch 为 convolutional 和 upsample 提供预置层。我们将通过扩展 nn.Module 类为其余层写自己的模块。
 
 #为shortcut layer / route layer 准备, 具体功能不在此实现，在Darknet类的forward函数中有体现
 class EmptyLayer(nn.Module):
@@ -60,16 +62,17 @@ class DetectionLayer(nn.Module):
         super(DetectionLayer, self).__init__()
         self.anchors = anchors
 
-
-
+        
+#create_modules 函数使用 parse_cfg 函数返回的 blocks 列表
 def create_modules(blocks):
     net_info = blocks[0]     #Captures the information about the input and pre-processing    
     module_list = nn.ModuleList() #module_list用于存储每个block,每个block对应cfg文件中一个块，类似[convolutional]里面就对应一个卷积块
-    prev_filters = 3  #初始值对应于输入数据3通道，用来存储我们需要持续追踪被应用卷积层的卷积核数量（上一层的卷积核数量（或特征图深度））
+    prev_filters = 3  #初始值对应于输入数据3通道，用来存储我们需要持续追踪被应用卷积层的卷积核数量（上一层的卷积核数量（或特征图深度））当我们定义一个新的卷积层时，我们必须定义它的卷积核维度。虽然卷积核的高度和宽度由 cfg 文件提供，但卷积核的深度是由上一层的卷积核数量（或特征图深度）决定的。这意味着我们需要持续追踪被应用卷积层的卷积核数量。我们使用变量 prev_filter 来做这件事
     output_filters = [] #我们不仅需要追踪前一层的卷积核数量，还需要追踪之前每个层。随着不断地迭代，我们将每个模块的输出卷积核数量添加到 output_filters 列表上。
     
-    for index, x in enumerate(blocks[1:]):#这里，我们迭代block[1:] 而不是blocks，因为blocks的第一个元素是一个net块，它不属于前向传播
-        module = nn.Sequential() #这里每个块用nn.sequential()创建为了一个module,一个module有多个层
+    #迭代模块的列表，并为每个模块创建一个 PyTorch 模块
+    for index, x in enumerate(blocks[1:]): #这里，我们迭代block[1:] 而不是blocks，因为blocks的第一个元素是一个net块，它不属于前向传播
+        module = nn.Sequential() #这里每个块用nn.sequential()创建为了一个module,一个module有多个层。nn.Sequential 类被用于按顺序地执行 nn.Module 对象的一个数字
     
         #check the type of block
         #create a new module for the block
@@ -157,24 +160,26 @@ def create_modules(blocks):
             anchors = [(anchors[i], anchors[i+1]) for i in range(0, len(anchors),2)]
             anchors = [anchors[i] for i in mask]
     
-            detection = DetectionLayer(anchors) #锚点,检测,位置回归,分类，这个类见predict_transform中
+            detection = DetectionLayer(anchors) #锚点,检测,位置回归,分类，这个类见predict_transform中。保存用于检测边界框的锚点
             module.add_module("Detection_{}".format(index), detection)
                               
-        module_list.append(module)
+        module_list.append(module) #回路结束时，做一些bookkeeping
         prev_filters = filters
         output_filters.append(filters)
         
     return (net_info, module_list)
 
+#使用 nn.Module 在 PyTorch 中构建自定义架构。这里，我们可以为检测器定义一个网络。用 members、blocks、net_info 和 module_list 对网络进行初始化。
 class Darknet(nn.Module):
     def __init__(self, cfgfile):
         super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)
         self.net_info, self.module_list = create_modules(self.blocks)
-        
+ 
+#forward 主要有两个目的。一，计算输出；二，尽早处理的方式转换输出检测特征图（例如转换之后，这些不同尺度的检测图就能够串联，不然会因为不同维度不可能实现串联）。
     def forward(self, x, CUDA):
         modules = self.blocks[1:]
-        outputs = {}   #We cache the outputs for the route layer
+        outputs = {}   #We cache the outputs for the route layer由于路由层和捷径层需要之前层的输出特征图，我们在字典 outputs 中缓存每个层的输出特征图。关键在于层的索引，且值对应特征图。
         
         write = 0 #write表示我们是否遇到第一个检测。write=0，则收集器尚未初始化，write=1，则收集器已经初始化，我们只需要将检测图与收集器级联起来即可。
         for i, module in enumerate(modules):        
@@ -206,7 +211,7 @@ class Darknet(nn.Module):
                 from_ = int(module["from"])
                 x = outputs[i-1] + outputs[i+from_] #求和运算，它只是将前一层的特征图添加到后面的层上而已
     
-            elif module_type == 'yolo':        
+            elif module_type == 'yolo':  #YOLO 的输出是一个卷积特征图，包含沿特征图深度的边界框属性      
                 anchors = self.module_list[i][0].anchors
                 #Get the input dimensions
                 inp_dim = int (self.net_info["height"])
