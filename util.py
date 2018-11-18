@@ -20,7 +20,7 @@ def unique(tensor):
 def bbox_iou(box1, box2):
     """
     Returns the IoU of two bounding boxes 
-    
+    计算IoU
     
     """
     #Get the coordinates of bounding boxes
@@ -93,10 +93,12 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True): /
     
     return prediction
 
+//使我们的输出满足 objectness 分数阈值和非极大值抑制（NMS），以得到后文所说的「真实（true）」检测结果
 def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
-    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
+    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2) //对于有低于一个阈值的 objectness 分数的每个边界框，我们将其每个属性的值（表示该边界框的一整行）都设为零
     prediction = prediction*conf_mask
     
+    //每个框的两个对角坐标能更轻松地计算两个框的 IoU，故转换
     box_corner = prediction.new(prediction.shape)
     box_corner[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
     box_corner[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
