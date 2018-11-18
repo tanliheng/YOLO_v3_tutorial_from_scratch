@@ -87,18 +87,18 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True): /
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
     
-    prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes])) //将 sigmoid 激活函数应用到类别分数中
+    prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes])) #将 sigmoid 激活函数应用到类别分数中
 
-    prediction[:,:,:4] *= stride //将检测图的大小调整到与输入图像大小一致
+    prediction[:,:,:4] *= stride #将检测图的大小调整到与输入图像大小一致
     
     return prediction
 
-//使我们的输出满足 objectness 分数阈值和非极大值抑制（NMS），以得到后文所说的「真实（true）」检测结果
+#使我们的输出满足 objectness 分数阈值和非极大值抑制（NMS），以得到后文所说的「真实（true）」检测结果
 def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
-    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2) //对于有低于一个阈值的 objectness 分数的每个边界框，我们将其每个属性的值（表示该边界框的一整行）都设为零
+    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2) #对于有低于一个阈值的 objectness 分数的每个边界框，我们将其每个属性的值（表示该边界框的一整行）都设为零
     prediction = prediction*conf_mask
     
-    //每个框的两个对角坐标能更轻松地计算两个框的 IoU，故转换
+    #每个框的两个对角坐标能更轻松地计算两个框的 IoU，故转换
     box_corner = prediction.new(prediction.shape)
     box_corner[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
     box_corner[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
@@ -203,7 +203,7 @@ def letterbox_image(img, inp_dim):
 def prep_image(img, inp_dim):
     """
     Prepare image for inputting to the neural network. 
-    
+    将 numpy 数组转换成 PyTorch 的输入格式
     Returns a Variable 
     """
     img = (letterbox_image(img, (inp_dim, inp_dim)))
