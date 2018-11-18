@@ -44,7 +44,7 @@ def bbox_iou(box1, box2):
     
     return iou
 
-def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
+def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True): //检测特征图转换成二维张量，张量的每一行对应边界框的属性
 
     
     batch_size = prediction.size(0)
@@ -56,14 +56,14 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
     prediction = prediction.transpose(1,2).contiguous()
     prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
-    anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
+    anchors = [(a[0]/stride, a[1]/stride) for a in anchors] //使用检测特征图的步幅分割锚点
 
     #Sigmoid the  centre_X, centre_Y. and object confidencce
     prediction[:,:,0] = torch.sigmoid(prediction[:,:,0])
     prediction[:,:,1] = torch.sigmoid(prediction[:,:,1])
     prediction[:,:,4] = torch.sigmoid(prediction[:,:,4])
     
-    #Add the center offsets
+    #Add the center offsets 将网格偏移添加到中心坐标预测中
     grid = np.arange(grid_size)
     a,b = np.meshgrid(grid, grid)
 
@@ -78,7 +78,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
 
     prediction[:,:,:2] += x_y_offset
 
-    #log space transform height and the width
+    #log space transform height and the width 将锚点应用到边界框维度中
     anchors = torch.FloatTensor(anchors)
 
     if CUDA:
@@ -87,9 +87,9 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
     
-    prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes]))
+    prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes])) //将 sigmoid 激活函数应用到类别分数中
 
-    prediction[:,:,:4] *= stride
+    prediction[:,:,:4] *= stride //将检测图的大小调整到与输入图像大小一致
     
     return prediction
 
