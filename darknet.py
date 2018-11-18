@@ -257,6 +257,7 @@ class Darknet(nn.Module):
         
         weights = np.fromfile(fp, dtype = np.float32) #加载 np.ndarray 中的剩余权重，权重是以float32类型存储的
         
+        //迭代地加载权重文件到网络的模块上
         ptr = 0
         for i in range(len(self.module_list)):
             module_type = self.blocks[i + 1]["type"] #blocks中的第一个元素是网络参数和图像的描述，所以从blocks[1]开始读入
@@ -319,7 +320,7 @@ class Darknet(nn.Module):
                     #Finally copy the data
                     conv.bias.data.copy_(conv_biases)
                     
-                #Let us load the weights for the Convolutional layers
+                #Let us load the weights for the Convolutional layers 加载卷积层的权重
                 num_weights = conv.weight.numel()
                 
                 #Do the same as above for weights
