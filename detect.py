@@ -52,13 +52,13 @@ start = 0
 CUDA = torch.cuda.is_available()
 
 
-
+//将类别文件载入到我们的程序中
 num_classes = 80
 classes = load_classes("data/coco.names")
 
 
 
-#Set up the neural network
+#Set up the neural network 初始化网络并载入权重
 print("Loading network.....")
 model = Darknet(args.cfgfile)
 model.load_weights(args.weightsfile)
@@ -77,6 +77,7 @@ if CUDA:
 #Set the model in evaluation mode
 model.eval()
 
+//从磁盘读取图像或从目录读取多张图像。图像的路径存储在一个名为 imlist 的列表中
 read_dir = time.time()
 #Detection phase
 try:
@@ -98,7 +99,7 @@ im_batches = list(map(prep_image, loaded_ims, [inp_dim for x in range(len(imlist
 im_dim_list = [(x.shape[1], x.shape[0]) for x in loaded_ims]
 im_dim_list = torch.FloatTensor(im_dim_list).repeat(1,2)
 
-
+//创建 batch
 leftover = 0
 if (len(im_dim_list) % batch_size):
     leftover = 1
@@ -182,7 +183,7 @@ colors = pkl.load(open("pallete", "rb"))
 
 draw = time.time()
 
-
+//绘制边界框
 def write(x, results):
     c1 = tuple(x[1:3].int())
     c2 = tuple(x[3:5].int())
@@ -198,9 +199,9 @@ def write(x, results):
     return img
 
 
-list(map(lambda x: write(x, loaded_ims), output))
+list(map(lambda x: write(x, loaded_ims), output)) //原地修改 loaded_ims 之中的图像
 
-det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
+det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1])) //每张图像都以「det_」加上图像名称的方式保存
 
 list(map(cv2.imwrite, det_names, loaded_ims))
 
